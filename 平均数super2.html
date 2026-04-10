@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>平均数可视化课件 - 响应式增强版</title>
+  <!-- 引入全局配置 (包含密钥) -->
+  <script src="config.js"></script>
+  <style>
+    :root {
+      --primary: #3b82f6;
+      --primary-dark: #2563eb;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #1e293b;
+      --border: #e2e8f0;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --success: #10b981;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* 顶部导航 */
+    header {
+      background: var(--card);
+      padding: 10px 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    header h1 { font-size: 1.25rem; font-weight: 700; color: var(--primary); }
+    .header-right { display: flex; align-items: center; gap: 15px; }
+    
+    /* 试用状态标签 */
+    .trial-badge {
+      font-size: 0.85rem;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .trial-free { background: #f1f5f9; color: #64748b; }
+    .trial-pro { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #b45309; }
+    .trial-warn { background: #fee2e2; color: #dc2626; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+
+    .btn-activate {
+      padding: 6px 14px;
+      background: var(--warning);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .btn-activate:hover { opacity: 0.9; }
+
+    /* 主内容区域 (保留您原有的 UI 结构) */
+    .container { max-width: 1000px; margin: 20px auto; padding: 0 20px; }
+    .main-ui {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      min-height: 400px;
+    }
+    .ui-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 15px;
+    }
+    .btn {
+      padding: 8px 16px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-right: 8px;
+    }
+    .btn-outline { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
+    
+    /* 拦截弹窗 */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .modal-box {
+      background: #fff;
+      padding: 30px;
+      border-radius: 16px;
+      max-width: 400px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    }
+    .modal-box h3 { margin-bottom: 10px; color: var(--text); }
+    .modal-box p { color: #64748b; margin-bottom: 20px; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+
+  <!-- 顶部导航 -->
+  <header>
+    <h1>📊 平均数可视化课件</h1>
+    <div class="header-right">
+      <div id="trialStatus" class="trial-badge trial-free">
+        <i class="fas fa-clock"></i> <span id="trialTime">计算中...</span>
+      </div>
+      <button class="btn-activate" onclick="openPay()">🔑 激活会员</button>
+    </div>
+  </header>
+
+  <!-- 主内容区 -->
+  <div class="container">
+    <div class="main-ui">
+      <div class="ui-header">
+        <div style="font-weight:600">📂 编辑区</div>
+        <div>
+          <button class="btn btn-outline">👁️ 统计面板</button>
+          <button class="btn btn-outline">↩️ 撤销</button>
+          <button class="btn btn-outline">🔄 重置</button>
+        </div>
+      </div>
+
+      <!-- 这里是您原有的课件内容占位 -->
+      <div style="text-align:center; padding:50px; color:#94a3b8;">
+        <h2>数据管理区域</h2>
+        <p>➕ 新增数据 | 总和: 0 | 人数: 0 | 平均数: 0</p>
+        <br>
+        <div style="display:flex; justify-content:center; gap:10px;">
+          <button class="btn">➕</button>
+          <button class="btn btn-outline">➖</button>
+          <button class="btn btn-outline">🎯</button>
+          <button class="btn btn-outline">📺</button>
+          <button class="btn btn-outline">同样多</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 拦截弹窗 -->
+  <div id="limitModal" class="modal-overlay">
+    <div class="modal-box">
+      <div style="font-size:3rem; margin-bottom:10px;">⏰</div>
+      <h3>今日试用时间已用完</h3>
+      <p>每日免费试用 5 分钟。<br>激活会员可无限使用本课件及全站工具。</p>
+      <button class="btn" style="background:var(--warning); margin-right:10px;" onclick="openPay()">立即激活</button>
+      <button class="btn btn-outline" onclick="closeLimitModal()">关闭</button>
+    </div>
+  </div>
+
+  <script>
+    // ================= 会员系统 (精简版) =================
+    // 确保 config.js 已加载
+    const SECRET_KEY = SITE_CONFIG ? SITE_CONFIG.SECRET_KEY : "ChangeThisToYourOwnSuperSecretKey_2026!";
+    const STORAGE_KEY = SITE_CONFIG ? SITE_CONFIG.STORAGE.LICENSE : "teacher_pro_license";
+
+    class PremiumManager {
+      constructor() {
+        this.data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+        this.isPro = this._check();
+      }
+      _check() {
+        if (!this.data) return false;
+        if (this.data.e && Date.now() > this.data.e) { localStorage.removeItem(STORAGE_KEY); this.data = null; return false; }
+        return true;
+      }
+      async activate(key) {
+        key = key.trim();
+        if (!key.startsWith('TEACHERPRO-')) return { ok: false };
+        try {
+          const p = JSON.parse(atob(key.replace('TEACHERPRO-', '')));
+          const sig = await this._hmac(p.t + p.i + p.e + p.d); // 兼容旧版签名逻辑，如需更强验证请使用 JSON 签名
+          // 注意：如果您的生成器更新了 JSON 签名逻辑，这里也需要更新
+          const signData = JSON.stringify({ t: p.t, i: p.i, e: p.e, d: p.d });
+          const newSig = await this._hmac(signData);
+          
+          if (sig !== p.s && newSig !== p.s) return { ok: false };
+          
+          const device = 'dev_' + Math.abs([navigator.userAgent, screen.width].join('').split('').reduce((a, c) => a + c.charCodeAt(0), 0)).toString(36);
+          this.data = { t: p.t, i: p.i, e: p.e, d: p.d || device, a: Date.now() };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+          this.isPro = true;
+          return { ok: true, msg: p.t === 'permanent' ? '永久会员' : '30 天会员' };
+        } catch (e) { return { ok: false }; }
+      }
+      async _hmac(t) {
+        const enc = new TextEncoder();
+        const k = await crypto.subtle.importKey('raw', enc.encode(SECRET_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+        const s = await crypto.subtle.sign('HMAC', k, enc.encode(t));
+        return Array.from(new Uint8Array(s)).map(b => b.toString(16).padStart(2, '0')).join('');
+      }
+    }
+    const premium = new PremiumManager();
+
+    // ================= 试用时间限制系统 =================
+    const TRIAL_CONFIG = {
+      DAILY_LIMIT: 5 * 60 * 1000, // 5 分钟 (毫秒)
+      STORAGE_KEY: "avgToolTrial"
+    };
+
+    class TrialManager {
+      constructor() {
+        this.data = JSON.parse(localStorage.getItem(TRIAL_CONFIG.STORAGE_KEY) || '{}');
+        this.today = new Date().toISOString().slice(0, 10);
+        this.init();
+      }
+      
+      init() {
+        if (this.data.date !== this.today) {
+          this.data = { date: this.today, used: 0, warned: false };
+          this.save();
+        }
+        // 页面加载时检查
+        if (this.isTimeUp() && !premium.isPro) {
+          showLimitModal();
+        }
+      }
+      
+      save() { localStorage.setItem(TRIAL_CONFIG.STORAGE_KEY, JSON.stringify(this.data)); }
+      
+      getRemaining() {
+        if (premium.isPro) return Infinity;
+        return Math.max(0, TRIAL_CONFIG.DAILY_LIMIT - this.data.used);
+      }
+      
+      isTimeUp() { return this.getRemaining() <= 0; }
+      
+      startTimer() {
+        if (this.isTimeUp() || premium.isPro) return;
+        
+        this.interval = setInterval(() => {
+          if (document.hidden) return; // 页面隐藏时不计费
+          
+          this.data.used += 1000;
+          this.save();
+          updateDisplay();
+          
+          // 剩余 1 分钟警告
+          if (this.getRemaining() <= 60000 && !this.data.warned) {
+            this.data.warned = true;
+            this.save();
+            showToast("⚠️ 试用时间剩余不足 1 分钟，请保存进度！");
+          }
+          
+          // 时间用尽
+          if (this.isTimeUp()) {
+            this.stopTimer();
+            showLimitModal();
+          }
+        }, 1000);
+      }
+      
+      stopTimer() { if (this.interval) clearInterval(this.interval); }
+    }
+
+    const trial = new TrialManager();
+
+    // UI 更新
+    function updateDisplay() {
+      const elTime = document.getElementById('trialTime');
+      const elBadge = document.getElementById('trialStatus');
+      
+      if (premium.isPro) {
+        elBadge.innerHTML = '👑 会员无限使用';
+        elBadge.className = 'trial-badge trial-pro';
+        return;
+      }
+      
+      const remain = trial.getRemaining();
+      const mins = Math.floor(remain / 60000);
+      const secs = Math.floor((remain % 60000) / 1000);
+      
+      elTime.textContent = `${mins}分${secs}秒`;
+      if (remain <= 60000) {
+        elBadge.className = 'trial-badge trial-warn';
+        elTime.innerHTML = `<span style="color:red">⚠️ ${mins}分${secs}秒</span>`;
+      }
+    }
+
+    // 弹窗控制
+    function showLimitModal() { document.getElementById('limitModal').style.display = 'flex'; }
+    window.closeLimitModal = function() { 
+      document.getElementById('limitModal').style.display = 'none'; 
+      window.location.href = 'index.html'; // 时间到返回首页
+    }
+    window.openPay = function() {
+      // 复用主页的激活逻辑 (如果可能)，或者简单跳转
+      // 这里为了简单，直接弹窗提示输入卡密
+      const key = prompt("请输入您的会员卡密 (TEACHERPRO-...):");
+      if (key) {
+        premium.activate(key).then(res => {
+          if (res.ok) {
+            alert("✅ 激活成功！");
+            location.reload();
+          } else {
+            alert("❌ 激活失败，请检查卡密");
+          }
+        });
+      }
+    }
+
+    // 提示框
+    function showToast(msg) {
+      const t = document.createElement('div');
+      t.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#fff3cd;color:#856404;padding:10px 20px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:10000;';
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 4000);
+    }
+
+    // 生命周期
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) trial.stopTimer();
+      else trial.startTimer();
+    });
+    window.addEventListener('beforeunload', () => trial.stopTimer());
+
+    // 启动
+    updateDisplay();
+    trial.startTimer();
+  </script>
+</body>
+</html>
