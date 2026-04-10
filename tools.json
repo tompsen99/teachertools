@@ -48,22 +48,7 @@
         "拖拽排序"
       ]
     },
-    {
-      "name": "平均数拖拖",
-      "file": "平均数super2.html",
-      "icon": "fa-chart-bar",
-      "gradient": "linear-gradient(135deg, #fa709a, #fee140)",
-      "category": [
-        "design",
-        "teaching",
-        "game"
-      ],
-      "description": "交互式平均数教学课件，支持数据增减、可视化统计、平均线展示，让抽象概念直观易懂。",
-      "tags": [
-        "数学",
-        "可视化",
-        "会员专享"
-      ]
+
     }
   ]
 }
