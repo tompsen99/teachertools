@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>教师工具站 - 在线教学工具集合</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <!-- 1. 引入全局配置 -->
+  <!-- 引入全局配置 -->
   <script src="config.js"></script>
   <style>
     :root{--primary:#4facfe;--bg:#f8fafc;--card:#fff;--text:#1e293b;--light:#64748b;--border:#e2e8f0;--shadow:0 4px 6px rgba(0,0,0,.05)}
@@ -47,6 +47,7 @@
     .modal input{width:100%;padding:12px;border:2px solid var(--border);border-radius:10px;margin:12px 0;font-size:1rem}
     .btn-sub{width:100%;padding:12px;background:var(--primary);color:#fff;border:none;border-radius:10px;font-weight:600;cursor:pointer}
     .btn-close{margin-top:10px;background:none;border:none;color:var(--light);cursor:pointer;text-decoration:underline}
+    .loading{grid-column:1/-1;text-align:center;padding:3rem;color:var(--light)}
     @media(max-width:768px){nav{flex-direction:column;gap:1rem}.grid{grid-template-columns:1fr}}
   </style>
 </head>
@@ -72,11 +73,14 @@
   <div class="cat" data-c="design">设计</div>
   <div class="cat" data-c="teaching">教学</div>
   <div class="cat" data-c="office">办公</div>
+  <div class="cat" data-c="math">数学</div>
 </div>
 
 <div class="container" id="tools">
   <h2 style="text-align:center;margin-bottom:2rem">热门工具</h2>
-  <div class="grid" id="tGrid"><div style="text-align:center;color:var(--light);grid-column:1/-1">加载中...</div></div>
+  <div class="grid" id="tGrid">
+    <div class="loading"><i class="fas fa-spinner fa-spin"></i> 正在加载最新工具配置...</div>
+  </div>
 </div>
 
 <section class="features">
@@ -102,24 +106,21 @@
 </div>
 
 <script>
-// 2. 使用全局配置中的密钥
+// 会员核心逻辑
 const SECRET_KEY = SITE_CONFIG.SECRET_KEY;
 const STORAGE_KEY = SITE_CONFIG.STORAGE.LICENSE;
 
-// 会员核心逻辑
 class PM{
   constructor(){this.d=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");this.p=this._ck();}
   _ck(){if(!this.d)return false;if(this.d.e&&Date.now()>this.d.e){localStorage.removeItem(STORAGE_KEY);this.d=null;return false;}return true;}
   async act(k){
     k=k.trim();if(!k.startsWith('TEACHERPRO-'))return{o:0,m:'格式错误'};
-    try{
-      const p=JSON.parse(atob(k.replace('TEACHERPRO-','')));
-      // 🔑 核心修复：使用完全相同的 JSON 格式重建签名数据进行比对
-      const signData = JSON.stringify({ t: p.t, i: p.i, e: p.e, d: p.d });
-      const s=await this._h(signData);
-      if(s!==p.s)return{o:0,m:'签名无效'};
-      this.d={t:p.t,i:p.i,e:p.e,d:p.d||'dev_'+Math.random().toString(36).slice(2),a:Date.now()};
-      localStorage.setItem(STORAGE_KEY,JSON.stringify(this.d));this.p=true;return{o:1,m:p.t==='permanent'?'永久会员':'30天会员'}}
+    try{const p=JSON.parse(atob(k.replace('TEACHERPRO-','')));
+    const signData=JSON.stringify({t:p.t,i:p.i,e:p.e,d:p.d});
+    const s=await this._h(signData);
+    if(s!==p.s)return{o:0,m:'签名无效'};
+    this.d={t:p.t,i:p.i,e:p.e,d:p.d||'dev_'+Math.random().toString(36).slice(2),a:Date.now()};
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(this.d));this.p=true;return{o:1,m:p.t==='permanent'?'永久会员':'30 天会员'}}
     catch(e){return{o:0,m:'解析失败'}}}
   async _h(t){const e=new TextEncoder(),k=await crypto.subtle.importKey('raw',e.encode(SECRET_KEY),{name:'HMAC',hash:'SHA-256'},false,['sign']);
   return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC',k,e.encode(t)))).map(b=>b.toString(16).padStart(2,'0')).join('');}
@@ -142,30 +143,95 @@ async function doPay(){
 }
 document.getElementById('kIn').addEventListener('keypress',e=>{if(e.key==='Enter')doPay();});
 
-// 工具加载
-async function load(){
-  try{const r=await fetch('tools.json');const d=await r.json();
-  document.getElementById('tGrid').innerHTML=d.tools.map(t=>`
-    <div class="card" data-c="${t.category?.join(' ')||''}">
-      <div class="icon" style="background:${t.gradient}"><i class="fas ${t.icon}"></i></div>
-      <h3>${t.name}</h3><p>${t.description}</p>
-      <div class="tags">${(t.tags||[]).map(g=>`<span class="tag">${g}</span>`).join('')}</div>
-      <a href="${t.file}" class="link">立即使用 <i class="fas fa-arrow-right"></i></a>
-    </div>`).join('');
-  }catch(e){document.getElementById('tGrid').innerHTML='<div style="text-align:center;color:#ef4444">加载失败，请检查 tools.json</div>';}
+// ================= 核心：动态加载工具 (防缓存版) =================
+async function loadTools() {
+  const grid = document.getElementById('tGrid');
+  try {
+    // 🔑 关键修改：添加 ?t= 时间戳，强制浏览器请求最新的 tools.json，忽略缓存
+    const response = await fetch('tools.json?t=' + new Date().getTime());
+    if (!response.ok) throw new Error('网络请求失败');
+    const data = await response.json();
+    
+    if (!data.tools || data.tools.length === 0) {
+      grid.innerHTML = '<div class="loading">⚠️ 暂无工具配置，请检查 tools.json</div>';
+      return;
+    }
+    
+    grid.innerHTML = data.tools.map(tool => `
+      <div class="card" data-category="${tool.category?.join(' ') || 'teaching'}">
+        <div class="icon" style="background:${tool.gradient}"><i class="fas ${tool.icon}"></i></div>
+        <h3>${tool.name}</h3>
+        <p>${tool.description}</p>
+        <div class="tags">${(tool.tags || []).map(tag => `<span class="tag">${tag}</span>`).join('')}</div>
+        <a href="${tool.file}" class="link">立即使用 <i class="fas fa-arrow-right"></i></a>
+      </div>
+    `).join('');
+    
+    // 重新绑定分类筛选和搜索事件
+    bindCategoryFilter();
+    bindSearch();
+    
+  } catch (error) {
+    console.error('加载工具失败:', error);
+    grid.innerHTML = `<div class="loading" style="color:#ef4444">
+      <i class="fas fa-exclamation-circle"></i><br>
+      加载失败 (${error.message})<br>
+      <small>请检查 tools.json 是否存在且格式正确</small>
+    </div>`;
+  }
 }
 
-// 分类 & 搜索
-document.querySelectorAll('.cat').forEach(c=>c.onclick=()=>{
-  document.querySelectorAll('.cat').forEach(x=>x.classList.remove('act'));c.classList.add('act');
-  const cat=c.dataset.c;document.querySelectorAll('.card').forEach(card=>{
-    const cc=card.dataset.c.split(' ');
-    card.style.display=(cat==='all'||cc.includes(cat))?'block':'none';
+// 分类筛选逻辑
+function bindCategoryFilter() {
+  const tabs = document.querySelectorAll('.cat');
+  const cards = document.querySelectorAll('.card');
+  
+  tabs.forEach(tab => {
+    tab.onclick = () => {
+      tabs.forEach(t => t.classList.remove('act'));
+      tab.classList.add('act');
+      const cat = tab.dataset.c;
+      
+      cards.forEach(card => {
+        const cats = card.dataset.category?.split(' ') || [];
+        if (cat === 'all' || cats.includes(cat)) {
+          card.style.display = 'block';
+          setTimeout(() => { card.style.opacity = '1'; card.style.transform = 'scale(1)'; }, 10);
+        } else {
+          card.style.opacity = '0';
+          card.style.transform = 'scale(0.8)';
+          setTimeout(() => { card.style.display = 'none'; }, 300);
+        }
+      });
+    };
   });
-});
-document.getElementById('sIn').oninput=e=>{const v=e.target.value.toLowerCase();document.querySelectorAll('.card').forEach(c=>c.style.display=c.textContent.toLowerCase().includes(v)?'block':'none');};
+}
 
-load();updMemUI();
+// 搜索逻辑
+function bindSearch() {
+  const input = document.getElementById('sIn');
+  const cards = document.querySelectorAll('.card');
+  
+  input.oninput = (e) => {
+    const term = e.target.value.toLowerCase();
+    cards.forEach(card => {
+      const text = card.textContent.toLowerCase();
+      if (text.includes(term)) {
+        card.style.display = 'block';
+        setTimeout(() => { card.style.opacity = '1'; }, 10);
+      } else {
+        card.style.opacity = '0';
+        setTimeout(() => { card.style.display = 'none'; }, 300);
+      }
+    });
+  };
+}
+
+// 页面初始化
+document.addEventListener('DOMContentLoaded', () => {
+  loadTools();
+  updMemUI();
+});
 </script>
 </body>
 </html>
