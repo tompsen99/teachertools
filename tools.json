@@ -47,6 +47,23 @@
         "纯本地",
         "拖拽排序"
       ]
+    },
+    {
+      "name": "三角形课堂",
+      "file": "边的关系.html",
+      "icon": "fa-font",
+      "gradient": "linear-gradient(135deg, #4facfe, #00f2fe)",
+      "category": [
+        "design",
+        "math",
+        "game"
+      ],
+      "description": "小学数学三角形内角和，边的关系，边长拖动构筑三角形游戏。",
+      "tags": [
+        "数学",
+        "三角形",
+        "四边形"
+      ]
     }
   ]
 }
